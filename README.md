@@ -1,56 +1,75 @@
-# Welcome to your Expo app 👋
+# BondsAdda Mobile
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Expo (SDK 57) + React Native app for discovering and investing in bonds on BondsAdda.
 
-## Get started
+**Stack:** Expo Router · Redux Toolkit + RTK Query · NativeWind 4 · expo-secure-store · TypeScript
 
-1. Install dependencies
-
-   ```bash
-   npm install
-   ```
-
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## Getting started
 
 ```bash
-npm run reset-project
+npm install
+# optional: edit .env to point at a staging API
+npx expo start
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+The app uses native modules (SecureStore, DocumentPicker), so for device testing use a development
+build: `npm run build:dev` (EAS) or `npx expo run:ios`.
 
-### Other setup steps
+## Scripts
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+| Command             | What it does                                                      |
+| ------------------- | ----------------------------------------------------------------- |
+| `npm run typecheck` | `tsc --noEmit`                                                    |
+| `npm run lint`      | `expo lint`                                                       |
+| `npm test`          | Unit tests (bond math, validation, API client) — offline          |
+| `npm run test:api`  | Live contract tests against the production API (read-only calls) |
+| `npm run doctor`    | `expo-doctor`                                                     |
+| `npm run build:ios` | EAS production build for iOS                                      |
+| `npm run submit:ios`| Submit the latest build to App Store Connect                      |
 
-## Learn more
+## Project layout
 
-To learn more about developing your project with Expo, look at the following resources:
+```
+src/
+  app/                 Expo Router routes (every file is a screen)
+    (auth)/            welcome, login, signup — only reachable when signed out
+    (tabs)/            home, explore, portfolio, deals, profile
+    bonds/[id]/        bond detail, invest (preview + create deal), cash-flow schedule
+    cashflows/[id]     saved cash-flow detail
+    deals/[id]         deal detail + payment
+    kyc/               status, submit KYC, bank details
+    payments/          payment history
+    categories.tsx
+  store/
+    index.ts           configureStore + signOut thunk
+    hooks.ts           typed hooks, useCustomerId
+    slices/authSlice.ts
+    api/
+      baseQuery.ts     MobileApiJson.ashx client: envelope unwrapping, retries, timeouts
+      bondsAddaApi.ts  RTK Query endpoints (all 25 actions) + cache tags
+      types.ts         response/request contracts
+  lib/                 bondMath, validation, formatting, secure session, file picking
+  components/          ui kit, bond components, forms
+```
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## API notes
 
-## Join the community
+- Every action responds **HTTP 200** with `{ Success, Message, Data }`. `Success: false` is mapped
+  to an RTK Query `CUSTOM_ERROR` whose message is shown to the user.
+- GETs are retried on network failure; POSTs are never retried (deal and payment creation are not
+  idempotent).
+- Shapes for login, profile, dashboard, deal, cash-flow and payment records could not be observed
+  without a real customer account; they are read defensively via `lib/fields.ts`. Pin them in
+  `store/api/types.ts` once the backend documents them.
+- Deal amounts shown before investing are **indicative** and computed in `lib/bondMath.ts`
+  (price per 100 FV, Actual/365 accrued interest, T+1 settlement, 0.0001% stamp duty). Confirm
+  these conventions with operations.
 
-Join our community of developers creating universal apps.
+## Release checklist (iOS)
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+1. `npx eas-cli@latest login` and `npx eas-cli@latest init` (writes the EAS project id into app.json).
+2. Confirm `ios.bundleIdentifier` (`com.bondsadda.app`) matches the App Store Connect record.
+3. `npm run build:ios` — EAS creates/manages the distribution certificate and provisioning profile.
+4. `npm run submit:ios`, then complete App Privacy answers in App Store Connect to match
+   `ios.privacyManifests` in app.json.
+5. Provide a demo account for App Review (KYC-verified, so the invest flow is reachable).
