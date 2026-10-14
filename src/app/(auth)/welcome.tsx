@@ -26,7 +26,7 @@ export default function WelcomeScreen() {
     >
       <View className="flex-1 items-center justify-center">
         <Image
-          source={require('@/assets/images/bondsaddalogo.png')}
+          source={require('@/assets/images/logo.png')}
           style={{ width: 280, height: 61 }}
           contentFit="contain"
           accessibilityLabel="BondsAdda"

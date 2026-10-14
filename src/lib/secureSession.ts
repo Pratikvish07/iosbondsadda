@@ -19,14 +19,36 @@ const storeOptions: SecureStore.SecureStoreOptions = {
   keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
 };
 
-// SecureStore has no web implementation. On web the session lives in memory only, so a reload
-// signs the user out; that is deliberate rather than falling back to plaintext localStorage.
-let webSession: string | null = null;
 const isWeb = Platform.OS === 'web';
+
+/**
+ * SecureStore has no web implementation. On web the session goes to `sessionStorage`: it survives
+ * page reloads but is wiped when the tab closes, and unlike `localStorage` it is not shared with
+ * other tabs. If storage is unavailable (private mode, blocked site data) we fall back to memory.
+ */
+let memorySession: string | null = null;
+const webStore = {
+  get(): string | null {
+    try {
+      return globalThis.sessionStorage?.getItem(SESSION_KEY) ?? memorySession;
+    } catch {
+      return memorySession;
+    }
+  },
+  set(value: string | null) {
+    memorySession = value;
+    try {
+      if (value === null) globalThis.sessionStorage?.removeItem(SESSION_KEY);
+      else globalThis.sessionStorage?.setItem(SESSION_KEY, value);
+    } catch {
+      // Storage blocked; the in-memory copy still keeps the user signed in until reload.
+    }
+  },
+};
 
 export async function loadSession(): Promise<Session | null> {
   try {
-    const raw = isWeb ? webSession : await SecureStore.getItemAsync(SESSION_KEY, storeOptions);
+    const raw = isWeb ? webStore.get() : await SecureStore.getItemAsync(SESSION_KEY, storeOptions);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<Session>;
     if (!parsed.customerId) return null;
@@ -47,7 +69,7 @@ export async function loadSession(): Promise<Session | null> {
 export async function saveSession(session: Session): Promise<void> {
   const raw = JSON.stringify(session);
   if (isWeb) {
-    webSession = raw;
+    webStore.set(raw);
     return;
   }
   await SecureStore.setItemAsync(SESSION_KEY, raw, storeOptions);
@@ -55,7 +77,7 @@ export async function saveSession(session: Session): Promise<void> {
 
 export async function clearSession(): Promise<void> {
   if (isWeb) {
-    webSession = null;
+    webStore.set(null);
     return;
   }
   try {

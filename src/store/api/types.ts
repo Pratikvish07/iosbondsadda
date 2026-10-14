@@ -91,13 +91,51 @@ export interface KycStatus {
   BankDocPath: string | null;
 }
 
-/** Verified (entry item shape not yet observed). */
+/** Verified. */
+export interface PanEntry {
+  KycId: string;
+  PanNumber: string;
+  PanDescription: string | null;
+  Status: string | null;
+}
+
+/** Verified. */
+export interface AadhaarEntry {
+  AdharDetailsId: string;
+  AdharNumber: string;
+  AdharDescription: string | null;
+  Status: string | null;
+}
+
+/** Verified. */
+export interface DematEntry {
+  DematId: string;
+  DematAccountNumber: string;
+  ClientId: string;
+  DematDescription: string | null;
+  DematStatus: string | null;
+  /** Server-relative path, e.g. "~/Uploads/DemateDocs/cml_<guid>.pdf". */
+  CmlFilePath: string | null;
+}
+
+/** Verified. A customer may have several bank entries (e.g. one Approved, one Pending). */
+export interface BankEntry {
+  BankDetailsId: string;
+  BankAccountNumber: string;
+  BankHolderName: string;
+  BankName: string;
+  IFSCCode: string;
+  BankStatus: string | null;
+  BankDocPath: string | null;
+}
+
+/** Verified. Also returned as `Data` by submitKyc. */
 export interface KycDetails {
   Status: KycStatus;
-  PanEntries: ApiRecord[];
-  AdharEntries: ApiRecord[];
-  DematEntries: ApiRecord[];
-  BankEntries: ApiRecord[];
+  PanEntries: PanEntry[];
+  AdharEntries: AadhaarEntry[];
+  DematEntries: DematEntry[];
+  BankEntries: BankEntry[];
 }
 
 /** Verified. */

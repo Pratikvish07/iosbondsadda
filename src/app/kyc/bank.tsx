@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Text } from 'react-native';
+import { Text } from 'react-native';
 
 import { DocumentField } from '@/components/forms/DocumentField';
 import { Button } from '@/components/ui/Button';
@@ -8,6 +8,7 @@ import { Screen } from '@/components/ui/Screen';
 import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { ErrorBanner } from '@/components/ui/StateViews';
 import { TextField } from '@/components/ui/TextField';
+import { notify } from '@/lib/dialogs';
 import type { PickedDocument } from '@/lib/files';
 import { hasErrors, isBankAccount, isIfsc, required, rule, validate } from '@/lib/validation';
 import { useSubmitBankMutation } from '@/store/api/bondsAddaApi';
@@ -68,9 +69,8 @@ export default function BankDetailsScreen() {
         bankDocBase64: doc.base64,
         bankDocFileName: doc.name,
       }).unwrap();
-      Alert.alert('Bank details submitted', result.message ?? 'Your bank details have been submitted for verification.', [
-        { text: 'OK', onPress: () => router.back() },
-      ]);
+      await notify('Bank details submitted', result.message ?? 'Your bank details have been submitted for verification.');
+      router.back();
     } catch (error) {
       setFormError(getErrorMessage(error, 'Unable to submit bank details. Please try again.'));
     }

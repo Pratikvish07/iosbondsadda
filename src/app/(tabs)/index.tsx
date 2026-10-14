@@ -54,7 +54,7 @@ export default function HomeScreen() {
     <Screen insetBottom={false} refreshing={refreshing} onRefresh={refresh} contentClassName="pb-8">
       <View className="flex-row items-center justify-between px-5 pb-3 pt-2">
         <Image
-          source={require('@/assets/images/bondsaddalogo.png')}
+          source={require('@/assets/images/logo.png')}
           style={{ width: 150, height: 33 }}
           contentFit="contain"
           accessibilityLabel="BondsAdda"

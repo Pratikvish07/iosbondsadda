@@ -56,7 +56,7 @@ export default function LoginScreen() {
     <Screen keyboard header={<ScreenHeader title="" />} contentClassName="px-6 pb-10">
       <View className="items-center">
         <Image
-          source={require('@/assets/images/bondsaddalogo.png')}
+          source={require('@/assets/images/logo.png')}
           style={{ width: 200, height: 44 }}
           contentFit="contain"
           accessibilityLabel="BondsAdda"

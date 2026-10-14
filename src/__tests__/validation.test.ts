@@ -72,6 +72,13 @@ describe('validate()', () => {
 });
 
 describe('formatting', () => {
+  it('reads .NET en-US date-times (M/d/yyyy h:mm:ss AM) used by deal records', () => {
+    expect(toApiDate(parseApiDate('5/28/2029 12:00:00 AM')!)).toBe('28/05/2029');
+    expect(toApiDate(parseApiDate('9/24/2032 12:00:00 AM')!)).toBe('24/09/2032');
+    // Without a time suffix the API's dd/MM/yyyy convention still applies.
+    expect(toApiDate(parseApiDate('05/06/2029')!)).toBe('05/06/2029');
+  });
+
   it('round-trips API dates and rejects impossible ones', () => {
     expect(toApiDate(parseApiDate('24/09/2032')!)).toBe('24/09/2032');
     expect(parseApiDate('31/02/2026')).toBeNull();
@@ -92,6 +99,11 @@ describe('formatting', () => {
     expect(resolveAssetUrl('/VImage/logo.jpg')).toBe('https://bondsadda.com/VImage/logo.jpg');
     expect(resolveAssetUrl('http://cdn.example.com/a.png')).toBe('https://cdn.example.com/a.png');
     expect(resolveAssetUrl(null)).toBeNull();
+    // Server logo paths contain spaces; encode them once, never twice.
+    expect(resolveAssetUrl('/VImage/45127MUTHOOT FINCORP LIMITED.png')).toBe(
+      'https://bondsadda.com/VImage/45127MUTHOOT%20FINCORP%20LIMITED.png',
+    );
+    expect(resolveAssetUrl('/VImage/A%20B.png')).toBe('https://bondsadda.com/VImage/A%20B.png');
   });
 
   it('derives display names and rating tones', () => {

@@ -22,3 +22,16 @@ export function paymentStatusLabel(data: unknown): string | null {
 export function isPaid(status: string | null | undefined): boolean {
   return /^(paid|success|successful|captured|completed)$/i.test((status ?? '').trim());
 }
+
+/**
+ * Investor-facing payment state. The server marks payment *requests* "Approved" before any money
+ * moves (PaymentId and PaymentDate stay null), so "Approved" alone must not read as paid.
+ */
+export function paymentState(record: unknown): string | null {
+  const status = paymentStatusLabel(record);
+  if (pickString(record, 'PaymentId', 'TransactionId') || pickString(record, 'PaymentDate') || isPaid(status)) {
+    return 'Paid';
+  }
+  if (!status) return null;
+  return /approved/i.test(status) ? 'Awaiting payment' : status;
+}

@@ -35,13 +35,19 @@ export function formatPercent(value: unknown): string {
   return n === null ? '—' : `${n.toFixed(2)}%`;
 }
 
-/** Parses the API's dd/MM/yyyy dates. Returns null for anything else. */
+/**
+ * Parses the API's dd/MM/yyyy dates. Some fields (e.g. a deal's MaturityDate) instead arrive as
+ * .NET en-US DateTime strings like "5/28/2029 12:00:00 AM", which are M/d/yyyy; the trailing
+ * AM/PM time identifies them. Returns null for anything else.
+ */
 export function parseApiDate(value: unknown): Date | null {
   if (typeof value !== 'string') return null;
-  const match = /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})/.exec(value.trim());
+  const text = value.trim();
+  const match = /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})/.exec(text);
   if (!match) return null;
-  const d = Number(match[1]);
-  const m = Number(match[2]);
+  const usFormat = /\s\d{1,2}:\d{2}(:\d{2})?\s*[AP]M$/i.test(text);
+  const d = Number(usFormat ? match[2] : match[1]);
+  const m = Number(usFormat ? match[1] : match[2]);
   const y = Number(match[3]);
   const date = new Date(y, m - 1, d);
   if (date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== d) return null;
@@ -70,12 +76,21 @@ export function formatMonthYear(value: unknown): string {
   return typeof value === 'string' && value.trim() ? value : '—';
 }
 
+/** Percent-encodes spaces etc. ("/VImage/MUTHOOT FINCORP.png") without double-encoding "%20". */
+function encodePath(p: string): string {
+  try {
+    return encodeURI(decodeURI(p));
+  } catch {
+    return encodeURI(p);
+  }
+}
+
 export function resolveAssetUrl(path: unknown): string | null {
   if (typeof path !== 'string' || !path.trim()) return null;
   const p = path.trim();
-  if (/^https:\/\//i.test(p)) return p;
-  if (/^http:\/\//i.test(p)) return p.replace(/^http:/i, 'https:');
-  return `${API_ORIGIN}${p.startsWith('/') ? '' : '/'}${p}`;
+  if (/^https:\/\//i.test(p)) return encodePath(p);
+  if (/^http:\/\//i.test(p)) return encodePath(p.replace(/^http:/i, 'https:'));
+  return encodePath(`${API_ORIGIN}${p.startsWith('/') ? '' : '/'}${p}`);
 }
 
 export function initials(name: string | null | undefined): string {

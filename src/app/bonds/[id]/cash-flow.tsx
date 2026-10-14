@@ -1,7 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { ChevronRight } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { BondLogo } from '@/components/bonds/BondLogo';
 import { Button } from '@/components/ui/Button';
@@ -12,6 +12,7 @@ import { EmptyView, ErrorBanner, ErrorView, LoadingView } from '@/components/ui/
 import { UnderlineTabs } from '@/components/ui/Tabs';
 import { issuerName } from '@/lib/bonds';
 import { bondTerms, quoteDeal, toScheduleRows } from '@/lib/bondMath';
+import { notify } from '@/lib/dialogs';
 import { pickString } from '@/lib/fields';
 import { clean, formatCurrency, formatDate, formatMonthYear, parseApiDate, toApiDate } from '@/lib/format';
 import { useCashFlowsQuery, useInvestmentPreviewQuery, useSaveCashFlowMutation } from '@/store/api/bondsAddaApi';
@@ -65,7 +66,7 @@ export default function CashFlowScheduleScreen() {
         priceRate: terms.price.toFixed(2),
         schedule: toScheduleRows(rows),
       }).unwrap();
-      Alert.alert('Saved', result.message ?? 'Cash-flow schedule saved.');
+      notify('Saved', result.message ?? 'Cash-flow schedule saved.');
       setTab('saved');
     } catch (error) {
       setSaveError(getErrorMessage(error, 'Unable to save this schedule.'));

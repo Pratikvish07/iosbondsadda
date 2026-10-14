@@ -1,5 +1,6 @@
 import { createApi } from '@reduxjs/toolkit/query/react';
 
+import { pickString } from '@/lib/fields';
 import { sessionFromAuthPayload, type Session } from '@/lib/secureSession';
 import { startSession } from '@/store/slices/authSlice';
 
@@ -126,9 +127,9 @@ export const bondsAddaApi = createApi({
       query: ({ customerId }) => ({ action: 'kycDetails', params: { customerId } }),
       providesTags: ['Kyc'],
     }),
-    submitKyc: build.mutation<MutationResult, SubmitKycRequest>({
+    submitKyc: build.mutation<MutationResult<KycDetails | null>, SubmitKycRequest>({
       query: (body) => ({ action: 'submitKyc', method: 'POST', body }),
-      transformResponse: withMessage,
+      transformResponse: (data: KycDetails | null, meta) => withMessage(data, meta),
       invalidatesTags: ['Kyc', 'Preview', 'Profile', 'Dashboard'],
     }),
     submitBank: build.mutation<MutationResult, SubmitBankRequest>({
@@ -159,7 +160,18 @@ export const bondsAddaApi = createApi({
     // ---- Deals ----
     deals: build.query<DealList, CustomerArg & Partial<ProductArg>>({
       query: ({ customerId, productId }) => ({ action: 'deals', params: { customerId, productId } }),
-      transformResponse: (data: DealList | null) => data ?? { Items: [] },
+      // The server can return the same deal several times (one row per joined record); keep the first.
+      transformResponse: (data: DealList | null) => {
+        const seen = new Set<string>();
+        const Items = (data?.Items ?? []).filter((deal) => {
+          const id = pickString(deal, 'DealConfirmationId', 'DealId', 'Id');
+          if (!id) return true;
+          if (seen.has(id)) return false;
+          seen.add(id);
+          return true;
+        });
+        return { Items };
+      },
       providesTags: [{ type: 'Deal', id: 'LIST' }],
     }),
     dealDetail: build.query<ApiRecord, CustomerArg & ProductArg & { dealConfirmationId: string }>({

@@ -24,6 +24,8 @@ export async function pickDocument(): Promise<PickedDocument | null> {
     type: DOCUMENT_TYPES,
     multiple: false,
     copyToCacheDirectory: true,
+    // Web only: read the file as a data URL so it can be sent inline.
+    base64: true,
   });
   if (result.canceled || !result.assets?.length) return null;
 
@@ -50,7 +52,7 @@ export async function pickDocument(): Promise<PickedDocument | null> {
 }
 
 function tooLarge() {
-  return new DocumentPickError(`File is too large. Maximum size is ${Math.round(MAX_UPLOAD_BYTES / 1024 / 1024)} MB.`);
+  return new DocumentPickError(`File is too large. Maximum size is ${Math.round((MAX_UPLOAD_BYTES / 1024 / 1024) * 10) / 10} MB.`);
 }
 
 function guessMime(name: string): string {

@@ -16,13 +16,14 @@ import {
   type LucideIcon,
 } from 'lucide-react-native';
 import type { ReactNode } from 'react';
-import { Alert, Linking, Pressable, Text, View } from 'react-native';
+import { Linking, Pressable, Text, View } from 'react-native';
 
 import { StatusBadge } from '@/components/ui/Badge';
 import { Card, Divider } from '@/components/ui/Card';
 import { Screen } from '@/components/ui/Screen';
 import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { PRIVACY_POLICY_URL, SUPPORT_EMAIL, TERMS_URL } from '@/config/env';
+import { confirm, notify } from '@/lib/dialogs';
 import { pickString } from '@/lib/fields';
 import { initials } from '@/lib/format';
 import { signOut } from '@/store';
@@ -71,30 +72,30 @@ export default function ProfileScreen() {
 
   const go = (href: Href) => () => router.push(href);
 
-  const confirmSignOut = () =>
-    Alert.alert('Sign out', 'Are you sure you want to sign out?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Sign out', style: 'destructive', onPress: () => dispatch(signOut()) },
-    ]);
+  const confirmSignOut = async () => {
+    const ok = await confirm({
+      title: 'Sign out',
+      message: 'Are you sure you want to sign out?',
+      confirmText: 'Sign out',
+      destructive: true,
+    });
+    if (ok) dispatch(signOut());
+  };
 
-  const requestDeletion = () =>
-    Alert.alert(
-      'Delete account',
-      `We will email ${SUPPORT_EMAIL} to request permanent deletion of your BondsAdda account and personal data. Records we must retain under SEBI and tax regulations are kept only for the required period.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Continue',
-          style: 'destructive',
-          onPress: () =>
-            Linking.openURL(
-              `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Account deletion request')}&body=${encodeURIComponent(
-                `Please delete my BondsAdda account.\n\nCustomer ID: ${customerId}\nRegistered email: ${email ?? ''}\nRegistered mobile: ${mobile ?? ''}`,
-              )}`,
-            ).catch(() => Alert.alert('No email app', `Please write to ${SUPPORT_EMAIL} from your registered email.`)),
-        },
-      ],
-    );
+  const requestDeletion = async () => {
+    const ok = await confirm({
+      title: 'Delete account',
+      message: `We will email ${SUPPORT_EMAIL} to request permanent deletion of your BondsAdda account and personal data. Records we must retain under SEBI and tax regulations are kept only for the required period.`,
+      confirmText: 'Continue',
+      destructive: true,
+    });
+    if (!ok) return;
+    Linking.openURL(
+      `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Account deletion request')}&body=${encodeURIComponent(
+        `Please delete my BondsAdda account.\n\nCustomer ID: ${customerId}\nRegistered email: ${email ?? ''}\nRegistered mobile: ${mobile ?? ''}`,
+      )}`,
+    ).catch(() => notify('No email app', `Please write to ${SUPPORT_EMAIL} from your registered email.`));
+  };
 
   return (
     <Screen
@@ -147,7 +148,7 @@ export default function ProfileScreen() {
           icon={LifeBuoy}
           label="Contact Support"
           onPress={() =>
-            Linking.openURL(`mailto:${SUPPORT_EMAIL}`).catch(() => Alert.alert('Support', SUPPORT_EMAIL))
+            Linking.openURL(`mailto:${SUPPORT_EMAIL}`).catch(() => notify('Support', SUPPORT_EMAIL))
           }
         />
       </Card>

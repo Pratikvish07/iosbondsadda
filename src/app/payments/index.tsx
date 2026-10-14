@@ -8,6 +8,7 @@ import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { EmptyView, ErrorView, LoadingView } from '@/components/ui/StateViews';
 import { pickNumber, pickString } from '@/lib/fields';
 import { formatCurrency, formatDate } from '@/lib/format';
+import { paymentState } from '@/lib/payments';
 import { usePaymentsQuery } from '@/store/api/bondsAddaApi';
 import { useCustomerId } from '@/store/hooks';
 import { colors } from '@/theme/colors';
@@ -41,7 +42,7 @@ export default function PaymentHistoryScreen() {
                 <View className="flex-row items-start justify-between">
                   <View className="flex-1 pr-3">
                     <Text className="font-bold text-ink">
-                      {pickString(item, 'ProductName', 'Description') ?? `Deal #${dealId ?? '—'}`}
+                      {pickString(item, 'ProductName', 'Security', 'Description') ?? 'Bond purchase'}
                     </Text>
                     <Text className="text-xs text-ink-muted">
                       {formatDate(pickString(item, 'PaymentDate', 'CreatedDate', 'Date'))}
@@ -55,7 +56,7 @@ export default function PaymentHistoryScreen() {
                       {formatCurrency(pickNumber(item, 'Amount', 'PaidAmount', 'TotalAmount'), true)}
                     </Text>
                     <View className="mt-1">
-                      <StatusBadge status={pickString(item, 'Status', 'PaymentStatus')} fallback="Pending" />
+                      <StatusBadge status={paymentState(item)} fallback="Pending" />
                     </View>
                   </View>
                 </View>

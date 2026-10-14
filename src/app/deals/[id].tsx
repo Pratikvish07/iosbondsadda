@@ -2,8 +2,9 @@ import { useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { CreditCard } from 'lucide-react-native';
 import { useRef, useState } from 'react';
-import { Alert, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
+import { RazorpayCheckout } from '@/components/payments/RazorpayCheckout';
 import { RecordDetails } from '@/components/RecordDetails';
 import { StatusBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -11,9 +12,11 @@ import { Card } from '@/components/ui/Card';
 import { Screen } from '@/components/ui/Screen';
 import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { ErrorBanner, ErrorView, LoadingView } from '@/components/ui/StateViews';
+import { notify } from '@/lib/dialogs';
 import { pickNumber, pickString } from '@/lib/fields';
 import { formatCurrency } from '@/lib/format';
-import { findPaymentUrl, isPaid, paymentStatusLabel } from '@/lib/payments';
+import { findPaymentUrl, isPaid, paymentState } from '@/lib/payments';
+import { parseRazorpayOrder, type RazorpayOrder, type RazorpayResult } from '@/lib/razorpay';
 import {
   useCreatePaymentOrderMutation,
   useCreatePaymentRequestMutation,
@@ -25,7 +28,7 @@ import { getErrorMessage } from '@/store/api/baseQuery';
 import { useCustomerId, useSession } from '@/store/hooks';
 import { colors } from '@/theme/colors';
 
-const AMOUNT_KEYS = ['ConsiderationStamp', 'TotalConsideration', 'TotalAmount', 'GrossConsideration', 'Amount', 'DealValue'];
+const AMOUNT_KEYS = ['ConsiderationWithStampDuty', 'ConsiderationStamp', 'TotalConsideration', 'TotalAmount', 'GrossConsideration', 'Amount', 'DealValue'];
 
 export default function DealDetailScreen() {
   const { id, productId = '' } = useLocalSearchParams<{ id: string; productId?: string }>();
@@ -33,6 +36,7 @@ export default function DealDetailScreen() {
   const session = useSession();
   const [payError, setPayError] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
+  const [checkoutOrder, setCheckoutOrder] = useState<RazorpayOrder | null>(null);
   const inFlight = useRef(false);
 
   const deal = useDealDetailQuery({ dealConfirmationId: id, customerId, productId });
@@ -48,8 +52,8 @@ export default function DealDetailScreen() {
   const dealStatus = pickString(record, 'Status', 'DealStatus');
   const amount = pickNumber(record, ...AMOUNT_KEYS);
   const quantity = pickString(record, 'Quantity', 'Qty', 'NoOfBonds');
-  const payment = status.data ? paymentStatusLabel(status.data) : null;
-  const paid = isPaid(payment) || isPaid(pickString(record, 'PaymentStatus'));
+  const payment = status.data ? paymentState(status.data) : null;
+  const paid = payment === 'Paid' || isPaid(pickString(record, 'PaymentStatus'));
   const bondName = pickString(record, 'ProductName', 'Security', 'BondName') ?? 'Bond deal';
 
   const pay = async () => {
@@ -70,6 +74,7 @@ export default function DealDetailScreen() {
 
     inFlight.current = true;
     setPaying(true);
+    let checkoutOpened = false;
     try {
       // A payment request exists once paymentStatus resolves; only create one if it does not.
       let dealId = id;
@@ -86,27 +91,52 @@ export default function DealDetailScreen() {
         mobile,
       }).unwrap();
 
+      // The server returns a Razorpay order; open Razorpay Checkout for it.
+      const razorpayOrder = parseRazorpayOrder(order.data);
       const url = findPaymentUrl(order.data);
-      if (url) {
+      if (razorpayOrder) {
+        checkoutOpened = true;
+        setCheckoutOrder(razorpayOrder);
+      } else if (url) {
         await WebBrowser.openBrowserAsync(url, { dismissButtonStyle: 'close' });
         // The user is back from checkout; refresh the authoritative status.
         status.refetch();
         deal.refetch();
       } else {
-        Alert.alert('Payment initiated', order.message ?? 'Follow the payment link sent to your email to complete payment.');
-        status.refetch();
+        setPayError('The payment gateway did not return a checkout. Please try again or contact support.');
       }
     } catch (error) {
       setPayError(getErrorMessage(error, 'Unable to start payment. Please try again.'));
     } finally {
-      inFlight.current = false;
-      setPaying(false);
+      // While checkout is open the button stays busy; onCheckoutResult releases it.
+      if (!checkoutOpened) {
+        inFlight.current = false;
+        setPaying(false);
+      }
+    }
+  };
+
+  const onCheckoutResult = (result: RazorpayResult) => {
+    setCheckoutOrder(null);
+    inFlight.current = false;
+    setPaying(false);
+    if (result.status === 'success') {
+      // Razorpay's client callback is not proof of payment; the server confirms it (signature
+      // verification / webhook). Refresh so the confirmed status appears as soon as it lands.
+      notify(
+        'Payment received',
+        `Your payment is being confirmed. Reference: ${result.paymentId}. This can take a minute to update.`,
+      );
+      status.refetch();
+      deal.refetch();
+    } else if (result.status === 'failed') {
+      setPayError(result.message);
     }
   };
 
   return (
     <Screen
-      header={<ScreenHeader title={`Deal #${id}`} />}
+      header={<ScreenHeader title="Deal Details" />}
       refreshing={deal.isFetching || status.isFetching}
       onRefresh={() => {
         deal.refetch();
@@ -146,7 +176,7 @@ export default function DealDetailScreen() {
         </View>
         {status.data ? (
           <View className="mt-2">
-            <RecordDetails record={status.data} exclude={['Status', 'PaymentStatus']} />
+            <RecordDetails record={status.data} exclude={['Status', 'PaymentStatus', 'RequestId', 'DealId', 'DealConfirmationId', 'PaymentId']} />
           </View>
         ) : null}
       </Card>
@@ -155,18 +185,18 @@ export default function DealDetailScreen() {
       <Card className="py-1">
         <RecordDetails
           record={record}
-          exclude={['Status', 'DealStatus', 'ProductName', 'CustomerId']}
+          exclude={['Status', 'DealStatus', 'ProductName', 'CustomerId', 'DealConfirmationId', 'DealId', 'ProductId']}
           order={[
             'DealConfirmationId',
             'DealDate',
-            'SattlementDate',
+            'SettlementDate',
             'Rate',
             'Quantity',
             'PrincipalAmount',
             'AccuredInterest',
             'StampDuty',
             'GrossConsideration',
-            'ConsiderationStamp',
+            'ConsiderationWithStampDuty',
           ]}
         />
       </Card>
@@ -174,6 +204,8 @@ export default function DealDetailScreen() {
       <View className="mt-4">
         <ErrorBanner message={payError} />
       </View>
+
+      <RazorpayCheckout order={checkoutOrder} description={bondName} onResult={onCheckoutResult} />
     </Screen>
   );
 }

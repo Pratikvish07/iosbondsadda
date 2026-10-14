@@ -1,11 +1,11 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { ArrowRight, CalendarClock, ChevronRight, ShieldAlert } from 'lucide-react-native';
 import { useMemo, useRef, useState } from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { BondLogo } from '@/components/bonds/BondLogo';
 import { QuantityStepper } from '@/components/bonds/QuantityStepper';
-import { Badge } from '@/components/ui/Badge';
+import { Badge, statusTone } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card, Divider, InfoRow } from '@/components/ui/Card';
 import { Screen } from '@/components/ui/Screen';
@@ -13,6 +13,7 @@ import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { ErrorBanner, ErrorView, LoadingView } from '@/components/ui/StateViews';
 import { issuerName, ratingTone } from '@/lib/bonds';
 import { bondTerms, quoteDeal } from '@/lib/bondMath';
+import { confirm, notify } from '@/lib/dialogs';
 import { pickString } from '@/lib/fields';
 import { clean, formatCurrency, formatDate, formatPercent, parseApiDate, toApiDate } from '@/lib/format';
 import { useCreateDealMutation, useInvestmentPreviewQuery } from '@/store/api/bondsAddaApi';
@@ -45,7 +46,10 @@ export default function InvestmentPreviewScreen() {
 
   const name = issuerName(product);
   const rating = clean(product.CreditRating);
-  const canInvest = preview.data.CanInvestNow;
+  // The server currently returns CanInvestNow=false for every product, even for fully approved
+  // customers, so approved KYC also unlocks investing. createDeal still validates server-side.
+  const kycApproved = statusTone(preview.data.Kyc?.OverallStatus) === 'success';
+  const canInvest = preview.data.CanInvestNow || kycApproved;
   const maxUnits = terms.availableUnits !== null && terms.availableUnits > 0 ? terms.availableUnits : undefined;
 
   const placeDeal = async () => {
@@ -74,9 +78,8 @@ export default function InvestmentPreviewScreen() {
       if (dealId) {
         router.replace({ pathname: '/deals/[id]', params: { id: dealId, productId: product.ProductId } });
       } else {
-        Alert.alert('Deal placed', result.message ?? 'Your deal has been created. Track it under Deals.', [
-          { text: 'View deals', onPress: () => router.replace('/deals') },
-        ]);
+        await notify('Deal placed', result.message ?? 'Your deal has been created. Track it under Deals.');
+        router.replace('/deals');
       }
     } catch (error) {
       setSubmitError(getErrorMessage(error, 'Unable to place your deal. Please try again.'));
@@ -85,18 +88,17 @@ export default function InvestmentPreviewScreen() {
     }
   };
 
-  const confirm = () =>
-    Alert.alert(
-      'Confirm investment',
-      `${quote.quantity} unit${quote.quantity > 1 ? 's' : ''} of ${name}\nAmount payable: ${formatCurrency(
+  const confirmInvestment = async () => {
+    const ok = await confirm({
+      title: 'Confirm investment',
+      message: `${quote.quantity} unit${quote.quantity > 1 ? 's' : ''} of ${name}\nAmount payable: ${formatCurrency(
         quote.totalPayable,
         true,
       )}`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Confirm', onPress: placeDeal },
-      ],
-    );
+      confirmText: 'Confirm',
+    });
+    if (ok) placeDeal();
+  };
 
   return (
     <Screen
@@ -110,7 +112,7 @@ export default function InvestmentPreviewScreen() {
             title="Proceed to Invest"
             variant="success"
             loading={creating}
-            onPress={confirm}
+            onPress={confirmInvestment}
             rightIcon={<ArrowRight size={18} color={colors.white} />}
           />
         ) : (

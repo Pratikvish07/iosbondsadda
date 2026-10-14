@@ -1,8 +1,11 @@
+import { configureStore } from '@reduxjs/toolkit';
 import type { BaseQueryApi } from '@reduxjs/toolkit/query';
 
-import { findPaymentUrl, isPaid } from '@/lib/payments';
+import { findPaymentUrl, isPaid, paymentState } from '@/lib/payments';
+import { parseRazorpayOrder } from '@/lib/razorpay';
 import { sessionFromAuthPayload } from '@/lib/secureSession';
 import { apiBaseQuery, getErrorMessage } from '@/store/api/baseQuery';
+import { bondsAddaApi } from '@/store/api/bondsAddaApi';
 
 jest.mock('expo-secure-store', () => ({
   WHEN_UNLOCKED_THIS_DEVICE_ONLY: 0,
@@ -69,6 +72,19 @@ describe('apiBaseQuery', () => {
     expect(result.error?.status).toBe('PARSING_ERROR');
   });
 
+  it('maps IIS error pages to their HTTP status with a readable message', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    fetchMock.mockResolvedValueOnce(new Response('<html>Server Error</html>', { status: 500 }));
+    const crash = await apiBaseQuery({ action: 'submitKyc', method: 'POST', body: {} }, api(), {});
+    expect(crash.error?.status).toBe(500);
+    expect(getErrorMessage(crash.error)).toMatch(/server error 500/);
+
+    fetchMock.mockResolvedValueOnce(new Response('The request entity is too large.', { status: 413 }));
+    const tooLarge = await apiBaseQuery({ action: 'submitKyc', method: 'POST', body: {} }, api(), {});
+    expect(getErrorMessage(tooLarge.error)).toMatch(/too large/);
+    warn.mockRestore();
+  });
+
   it('sends JSON bodies and the bearer token on POST', async () => {
     fetchMock.mockResolvedValueOnce(json({ Success: true, Message: '', Data: {} }));
     await apiBaseQuery({ action: 'submitBank', method: 'POST', body: { customerId: '1' } }, api('tkn'), {});
@@ -94,6 +110,67 @@ describe('apiBaseQuery', () => {
     expect(result.error?.status).toBe('FETCH_ERROR');
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(getErrorMessage(result.error)).toMatch(/internet connection/);
+  });
+});
+
+describe('deals endpoint', () => {
+  it('drops duplicate rows the server returns for the same deal', async () => {
+    const store = configureStore({
+      reducer: { [bondsAddaApi.reducerPath]: bondsAddaApi.reducer, auth: () => ({ session: null }) },
+      middleware: (getDefault) => getDefault().concat(bondsAddaApi.middleware),
+    });
+    fetchMock.mockResolvedValueOnce(
+      json({
+        Success: true,
+        Message: '',
+        Data: {
+          Items: [
+            { DealConfirmationId: '1441' },
+            { DealConfirmationId: '1442' },
+            { DealConfirmationId: '1442' },
+            { DealConfirmationId: '1442' },
+          ],
+        },
+      }),
+    );
+    const result = await store.dispatch(bondsAddaApi.endpoints.deals.initiate({ customerId: '1587' }));
+    expect(result.data?.Items.map((d) => d.DealConfirmationId)).toEqual(['1441', '1442']);
+    store.dispatch(bondsAddaApi.util.resetApiState());
+  });
+});
+
+describe('parseRazorpayOrder', () => {
+  // Shape captured from the live createPaymentOrder response.
+  const data = {
+    DealId: '1441',
+    RazorpayOrderId: 'order_TnkCSDnrMcqNga',
+    RazorpayKeyId: 'rzp_live_TnjhgmlPgvjLQm',
+    Currency: 'INR',
+    AmountInPaise: '103641',
+    Amount: '1036.41',
+    CustomerName: 'Pratik Vishwakarma',
+    Email: 'pratik10@gmail.com',
+    Mobile: '00112345671',
+  };
+
+  it('reads the order and keeps the server amount in paise', () => {
+    expect(parseRazorpayOrder(data)).toEqual({
+      orderId: 'order_TnkCSDnrMcqNga',
+      keyId: 'rzp_live_TnjhgmlPgvjLQm',
+      amountInPaise: 103641,
+      currency: 'INR',
+      customerName: 'Pratik Vishwakarma',
+      email: 'pratik10@gmail.com',
+      // "00112345671" is not a valid Indian mobile, so it is not prefilled.
+      mobile: undefined,
+      dealId: '1441',
+    });
+  });
+
+  it('rejects incomplete orders', () => {
+    expect(parseRazorpayOrder({ ...data, RazorpayOrderId: undefined })).toBeNull();
+    expect(parseRazorpayOrder({ ...data, AmountInPaise: '10.5' })).toBeNull();
+    expect(parseRazorpayOrder(null)).toBeNull();
   });
 });
 
@@ -127,6 +204,13 @@ describe('payments helpers', () => {
     expect(findPaymentUrl({ Order: { short_url: 'https://rzp.io/i/abc' } })).toBe('https://rzp.io/i/abc');
     expect(findPaymentUrl({ Order: { ShortUrl: 'https://rzp.io/i/abc' } })).toBe('https://rzp.io/i/abc');
     expect(findPaymentUrl({ PaymentUrl: 'http://insecure.example.com' })).toBeNull();
+  });
+
+  it('does not treat an approved-but-unpaid request as paid', () => {
+    expect(paymentState({ Status: 'Approved', PaymentId: null, PaymentDate: null })).toBe('Awaiting payment');
+    expect(paymentState({ Status: 'Approved', PaymentId: 'pay_123' })).toBe('Paid');
+    expect(paymentState({ Status: 'Failed' })).toBe('Failed');
+    expect(paymentState({})).toBeNull();
   });
 
   it('recognises paid statuses', () => {

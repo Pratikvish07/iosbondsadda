@@ -28,5 +28,8 @@ export const CONTACT_URL = `${API_ORIGIN}/Contact`;
 
 export const REQUEST_TIMEOUT_MS = 30_000;
 
-/** Upload limit for KYC / bank documents. Base64 inflates payloads by ~33%. */
-export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+/**
+ * Upload limit for KYC / bank documents. The server (IIS) rejects request bodies over ~4 MB with
+ * HTTP 413, and base64 inflates files by ~33%, so 2.5 MB is the largest file that reliably fits.
+ */
+export const MAX_UPLOAD_BYTES = 2.5 * 1024 * 1024;

@@ -75,6 +75,13 @@ async function send(request: ApiRequest, token: string | null, outerSignal: Abor
     try {
       parsed = text ? JSON.parse(text) : null;
     } catch {
+      if (__DEV__) {
+        console.warn(`[api] ${request.action} -> HTTP ${response.status} (non-JSON body):\n${text.slice(0, 2000)}`);
+      }
+      // IIS error pages (413, 500…) are HTML; report the HTTP status so users get a meaningful message.
+      if (!response.ok) {
+        return { status: response.status, outcome: { error: { status: response.status, data: text.slice(0, 500) } } };
+      }
       return {
         status: response.status,
         outcome: {
@@ -165,7 +172,10 @@ export function getErrorMessage(error: unknown, fallback = 'Something went wrong
         return 'We received an unexpected response from the server. Please try again later.';
       default:
         if (typeof e.status === 'number') {
-          if (e.status >= 500) return 'BondsAdda is temporarily unavailable. Please try again shortly.';
+          if (e.status === 413) return 'The uploaded file is too large. Please choose a file under 2.5 MB.';
+          if (e.status >= 500) {
+            return `BondsAdda could not process this request (server error ${e.status}). Please try again later or contact support.`;
+          }
           if (e.status === 404) return 'The requested information could not be found.';
         }
         return fallback;

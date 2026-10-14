@@ -38,8 +38,11 @@ export default function KycStatusScreen() {
   const overall = statusTone(data.OverallStatus);
   const verified = overall === 'success';
   const kycSubmitted = !!(data.PanStatus || data.AdharStatus || data.DemateStatus);
-  const kycEditable = !verified && statusTone(data.PanStatus) !== 'success';
-  const bankEditable = statusTone(data.BankStatus) !== 'success';
+  const approved = (status: string | null) => statusTone(status) === 'success';
+  // PAN, Aadhaar and demat go through one endpoint; offer it while any of them is not yet approved.
+  const kycEditable = !verified && ![data.PanStatus, data.AdharStatus, data.DemateStatus].every(approved);
+  const onlyDematMissing = approved(data.PanStatus) && approved(data.AdharStatus) && !approved(data.DemateStatus);
+  const bankEditable = !approved(data.BankStatus);
 
   return (
     <Screen header={<ScreenHeader title="KYC Status" />} refreshing={isFetching} onRefresh={refetch}>
@@ -57,7 +60,9 @@ export default function KycStatusScreen() {
         <Text className="mt-1 text-center text-ink-muted">
           {verified
             ? 'Your KYC has been successfully verified. You can now invest in bonds.'
-            : kycSubmitted
+            : onlyDematMissing
+              ? 'Your PAN and Aadhaar are verified. Add your demat account to complete KYC.'
+              : kycSubmitted
               ? 'Your documents are under review. We will notify you once verification is complete.'
               : 'Submit your PAN, Aadhaar, demat and bank details to start investing.'}
         </Text>
@@ -86,7 +91,7 @@ export default function KycStatusScreen() {
       <View className="mt-6 gap-3">
         {kycEditable ? (
           <Button
-            title={kycSubmitted ? 'Update KYC Documents' : 'Submit KYC'}
+            title={onlyDematMissing ? 'Add Demat Details' : kycSubmitted ? 'Update KYC Documents' : 'Submit KYC'}
             onPress={() => router.push('/kyc/submit')}
           />
         ) : null}

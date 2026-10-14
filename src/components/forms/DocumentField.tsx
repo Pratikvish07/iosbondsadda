@@ -7,7 +7,7 @@ import { colors } from '@/theme/colors';
 
 export function DocumentField({
   label,
-  hint = 'PDF, JPG or PNG · up to 5 MB',
+  hint = 'PDF, JPG or PNG · up to 2.5 MB',
   value,
   onChange,
   error,
