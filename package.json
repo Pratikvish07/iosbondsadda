@@ -56,7 +56,9 @@
     "test": "jest",
     "test:api": "jest --config jest.contract.config.js",
     "doctor": "expo-doctor",
-    "build:dev": "eas-cli build --profile development --platform ios",
+    "build:android:apk": "eas-cli build --profile preview --platform android",
+    "build:android": "eas-cli build --profile production --platform android",
+    "submit:android": "eas-cli submit --profile production --platform android",
     "build:ios": "eas-cli build --profile production --platform ios",
     "submit:ios": "eas-cli submit --profile production --platform ios"
   },

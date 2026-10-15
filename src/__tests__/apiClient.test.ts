@@ -2,7 +2,7 @@ import { configureStore } from '@reduxjs/toolkit';
 import type { BaseQueryApi } from '@reduxjs/toolkit/query';
 
 import { findPaymentUrl, isPaid, paymentState } from '@/lib/payments';
-import { parseRazorpayOrder } from '@/lib/razorpay';
+import { parseRazorpayOrder, resolveIntentUrl } from '@/lib/razorpay';
 import { sessionFromAuthPayload } from '@/lib/secureSession';
 import { apiBaseQuery, getErrorMessage } from '@/store/api/baseQuery';
 import { bondsAddaApi } from '@/store/api/bondsAddaApi';
@@ -165,6 +165,17 @@ describe('parseRazorpayOrder', () => {
       mobile: undefined,
       dealId: '1441',
     });
+  });
+
+  it('turns Android UPI intent links into URLs the OS can open', () => {
+    expect(
+      resolveIntentUrl('intent://pay?pa=razorpay@icici&am=1036.41#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;end'),
+    ).toBe('upi://pay?pa=razorpay@icici&am=1036.41');
+    expect(
+      resolveIntentUrl('intent://x#Intent;S.browser_fallback_url=https%3A%2F%2Fexample.com%2Fpay;end'),
+    ).toBe('https://example.com/pay');
+    expect(resolveIntentUrl('intent://x#Intent;end')).toBeNull();
+    expect(resolveIntentUrl('phonepe://pay?x=1')).toBe('phonepe://pay?x=1');
   });
 
   it('rejects incomplete orders', () => {

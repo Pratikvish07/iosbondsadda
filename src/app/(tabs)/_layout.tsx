@@ -14,6 +14,8 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
+        // Android: keep the tab bar from riding up on top of the keyboard (e.g. Explore search).
+        tabBarHideOnKeyboard: true,
         tabBarActiveTintColor: colors.navy,
         tabBarInactiveTintColor: colors.inkFaint,
         // The default bar (~49px) clips the label under a 24px icon on web; size it explicitly and

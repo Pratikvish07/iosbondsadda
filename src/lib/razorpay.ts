@@ -64,3 +64,24 @@ export function checkoutOptions(order: RazorpayOrder, description: string) {
 }
 
 export const RAZORPAY_SCRIPT = 'https://checkout.razorpay.com/v1/checkout.js';
+
+/**
+ * Android UPI apps are launched with `intent://host/path#Intent;scheme=upi;package=…;end`, which
+ * Linking cannot open directly. Rebuild it as `upi://host/path` (or use the fallback URL).
+ */
+export function resolveIntentUrl(url: string): string | null {
+  if (!/^intent:/i.test(url)) return url;
+  const [target, fragment = ''] = url.slice('intent:'.length).split('#Intent;');
+  const params = Object.fromEntries(
+    fragment
+      .split(';')
+      .filter((part) => part.includes('='))
+      .map((part) => {
+        const i = part.indexOf('=');
+        return [part.slice(0, i), part.slice(i + 1)];
+      }),
+  );
+  if (params.scheme) return `${params.scheme}:${target}`;
+  if (params['S.browser_fallback_url']) return decodeURIComponent(params['S.browser_fallback_url']);
+  return null;
+}

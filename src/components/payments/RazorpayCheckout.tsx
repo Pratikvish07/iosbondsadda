@@ -4,7 +4,14 @@ import { ActivityIndicator, Linking, Modal, Pressable, Text, View } from 'react-
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 
-import { checkoutOptions, RAZORPAY_SCRIPT, type RazorpayOrder, type RazorpayResult } from '@/lib/razorpay';
+import { notify } from '@/lib/dialogs';
+import {
+  checkoutOptions,
+  RAZORPAY_SCRIPT,
+  resolveIntentUrl,
+  type RazorpayOrder,
+  type RazorpayResult,
+} from '@/lib/razorpay';
 import { colors } from '@/theme/colors';
 
 export interface RazorpayCheckoutProps {
@@ -107,8 +114,13 @@ export function RazorpayCheckout({ order, description, onResult }: RazorpayCheck
             )}
             onShouldStartLoadWithRequest={(req) => {
               if (/^(https?|about|data|blob):/i.test(req.url)) return true;
-              // UPI / wallet intent: open the installed app instead of the WebView.
-              Linking.openURL(req.url).catch(() => {});
+              // UPI / wallet intent (upi://, tez://, Android intent://): open the installed app.
+              const target = resolveIntentUrl(req.url);
+              if (target) {
+                Linking.openURL(target).catch(() =>
+                  notify('App not found', 'The selected payment app is not installed. Please choose another method.'),
+                );
+              }
               return false;
             }}
             onError={() =>
